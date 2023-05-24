@@ -1,0 +1,65 @@
+---
+title: "Modelling the effect of interventions on COVID-19 in Victoria"
+subtitle: ETC5512 Assignment 4, Master of Business Analytics
+author: Arindom Baruah, 32779267, abar0090@student.monash.edu
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    css: monashreport.css
+    includes:
+      before_body: header.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+
+```{r libraries}
+library(tidyverse)
+library(here)
+library(ggplot2)
+library(ggthemes)
+
+```
+
+# Data sources
+
+1. The dataset pertaining to the COVID-19 cases for the current study is obtained from the official data source of COVID-19 cases curated by the [Victorian Government](https://www.coronavirus.vic.gov.au). This particular dataset contains all the reported cases in the state of Victoria between the time period of January 2020 to June 2022 and can be found in the __[data download](https://www.coronavirus.vic.gov.au/victorian-coronavirus-covid-19-data)__ section. The dataset contains the __diagnosis date, geographical origin of the infection case and the number of cases observed for the particular day__. Moreover, the dataset has a __long format__ which aids the __temporal analysis and modeling__ that will be carried out in the current study. Due to the __authenticity of the dataset__ due to it being released by the Victorian Government directly as well as the __tidy format of the data__, this dataset is ideal for the current analysis.
+
+2. The COVID-19 cases dataset released by Victorian Government is a type of __observational dataset__ as:
+
+   - The dataset contains observations of COVID-19 incidences observed over a period of time in the state of Victoria.
+   - The independent variables in the dataset are __not artificially or intentionally placed in specific units__ for the purpose of a study.
+   - There is no scenario where only a specific group of people who are exposed to the virus are studied against the rest of the people who are not exposed to the virus which would have suggested an experimental data.
+   - There is __no certain scientific claim__ that is expected to be validated using this dataset, as is usually the case for experimental data.
+   
+3. The unit of this current dataset is __the number of positive diagnosis cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the type of COVID test, data of diagnosis and the geographical region where the case was detected.
+
+Some of the variables which could act as unique identifiers for the COVID-19 dataset are __diagnosis data,age group,post code and the total case count__. For the days with a single observed case in any of the locations (postal code) and age group, a person maybe uniquely identified. 
+
+
+
+```{r data}
+df1 <- read_csv(here::here("data/NCOV_cases_by_agegroup.csv"))
+df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
+df3 <- read_csv(here::here("data/NCOV_COVID_Cases_by_Source_until_20220630.csv"))
+
+```
+
+
+
+# 🔍 Analysis
+
+# 📉 Data curation
+
+
+# Resources
+
+Cite your data sources, and software used here. 
+
+
