@@ -4,7 +4,7 @@ subtitle: ETC5512 Assignment 4, Master of Business Analytics
 author: Arindom Baruah, 32779267, abar0090@student.monash.edu
 date: '`r Sys.Date()`'
 output: 
-  html_document:
+  bookdown::html_document2:
     css: monashreport.css
     includes:
       before_body: header.html
@@ -24,7 +24,8 @@ library(tidyverse)
 library(here)
 library(ggplot2)
 library(ggthemes)
-
+library(ggthemes)
+library(bookdown)
 ```
 
 # Data sources
@@ -39,21 +40,189 @@ library(ggthemes)
    - There is __no certain scientific claim__ that is expected to be validated using this dataset, as is usually the case for experimental data.
    
 3. The unit of this current dataset is __the number of positive diagnosis cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the type of COVID test, data of diagnosis and the geographical region where the case was detected.
-
 Some of the variables which could act as unique identifiers for the COVID-19 dataset are __diagnosis data,age group,post code and the total case count__. For the days with a single observed case in any of the locations (postal code) and age group, a person maybe uniquely identified. 
 
 
 
-```{r data}
+```{r data_sourcing}
 df1 <- read_csv(here::here("data/NCOV_cases_by_agegroup.csv"))
 df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
 df3 <- read_csv(here::here("data/NCOV_COVID_Cases_by_Source_until_20220630.csv"))
-
 ```
 
 
 
 # 🔍 Analysis
+
+## <u> Daily cases observed </u>
+
+```{r caseplot, fig.cap="Cases observed per day",fig.align='center',include=TRUE}
+
+start_date <- ymd("2020/06/01") #Start date of analysis
+end_date <- ymd("2020/09/13") #End date of analysis
+local_ld <- ymd("2020/06/30") #Local lockdown initiates
+face_mask <- ymd("2020/07/27") # Mandatory facemasks
+
+plot_interval <- interval(start_date, end_date)
+
+df2 <- df2 %>% filter(diagnosis_date %within% plot_interval) %>% mutate(Cumulative_case_count = cumsum(Total_case_count))
+
+df_daily <- df2 %>% filter(diagnosis_date %within% plot_interval) %>% group_by(diagnosis_date)  %>% summarise(Cases_per_day = sum(Total_case_count))
+
+pl1 <- ggplot(data = df2, 
+              aes(x = diagnosis_date, 
+                  y = Cumulative_case_count)) + geom_line()
+
+pl2 <- ggplot(data = df_daily,
+              aes(x = diagnosis_date,
+                  y = Cases_per_day)) +
+  geom_line() + theme_clean() +
+  labs(x = "Diagnosis date", y = " Total cases per day") +
+  ggtitle("Cases observed per day in 2020") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title = element_text(face = 'bold')) +
+  annotate(
+    "segment",
+    x = local_ld,
+    xend = local_ld,
+    y = 0,
+    yend = 700,
+    colour = "red",
+    linetype = 1,
+    size = 2
+  ) +
+  annotate(
+    "segment",
+    x = local_ld - days(6),
+    y = 500,
+    xend = local_ld ,
+    yend = 400 ,
+    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  ) +
+  annotate(
+    "text",
+    x = local_ld - days(15),
+    y = 520,
+    colour = "black",
+    label = 'Lockdowns implemented \n from 30/06/2020',
+    size = unit(3, "pt")
+  ) +
+  annotate(
+    "segment",
+    x = face_mask,
+    xend = face_mask,
+    y = 0,
+    yend = 700,
+    colour = "blue",
+    linetype = 1,
+    size = 2
+  ) +
+  annotate(
+    "segment",
+    x = face_mask - days(6),
+    y = 500,
+    xend = face_mask ,
+    yend = 400 ,
+    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  ) +
+  annotate(
+    "text",
+    x = face_mask - days(12),
+    y = 530,
+    colour = "black",
+    label = 'Mandatory facemasks \n from 27/07/2020',
+    size = unit(3, "pt")
+  )
+pl2
+
+
+
+```
+
+## <u> 7-day growth rate of cases </u>
+
+```{r growthrate}
+df_rate <- df_daily %>%
+  mutate(
+    growth_rate = slider::slide_dbl(
+      .x = Cases_per_day,
+      .f = mean,
+      .before = 6,
+      .after = 0
+    )
+  )
+```
+
+```{r growthrateplot,fig.cap="7-day growth rate of cases observed per day",fig.align='center',include=TRUE }
+
+pl3 <- ggplot(data = df_rate,
+              aes(x = diagnosis_date,
+                  y = growth_rate)) +
+  geom_line(size=1.5) + theme_clean() +
+  labs(x = "Diagnosis date", y = "Total cases per day") +
+  ggtitle("7-day growth rate of cases \n in 2020") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title = element_text(face = 'bold')) +
+  annotate(
+    "segment",
+    x = local_ld,
+    xend = local_ld,
+    y = 0,
+    yend = 700,
+    colour = "red",
+    linetype = 1,
+    size = 2
+  ) +
+  annotate(
+    "segment",
+    x = local_ld - days(6),
+    y = 500,
+    xend = local_ld ,
+    yend = 400 ,
+    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  ) +
+  annotate(
+    "text",
+    x = local_ld - days(15),
+    y = 520,
+    colour = "black",
+    label = 'Lockdowns implemented \n from 30/06/2020',
+    size = unit(3, "pt")
+  ) +
+  annotate(
+    "segment",
+    x = face_mask,
+    xend = face_mask,
+    y = 0,
+    yend = 700,
+    colour = "blue",
+    linetype = 1,
+    size = 2
+  ) +
+  annotate(
+    "segment",
+    x = face_mask - days(6),
+    y = 500,
+    xend = face_mask ,
+    yend = 400 ,
+    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  ) +
+  annotate(
+    "text",
+    x = face_mask - days(12),
+    y = 530,
+    colour = "black",
+    label = 'Mandatory facemasks \n from 27/07/2020',
+    size = unit(3, "pt")
+  )
+pl3
+
+```
+As we can observe that the primary difference between the figures \@ref(fig:caseplot) and \@ref(fig:growthrateplot) is the smoothness of the lineplot. As we are using a 7-day mean growth rate instead of the actual daily cases, __the sudden spikes as a result of the peaks and troughs were greatly reduced__. This aids the __interpretability__ of the plot and allows for __better insights.__ 
+
+
+Based on the 7-day growth rate of cases in 2020 as depicted by figure \@ref(fig:growthrateplot), we observe that while the lockdowns were implemented fairly early into the start of the pandemic, the __cases were observed to grow exponentially but started to slightly dip around mid July__. After the __start of the second intervention (mandatory masks), the growth rate continued to rise but was observed to drop from early August__ until the end of the time of study.
+
 
 # 📉 Data curation
 
