@@ -12,7 +12,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  echo = FALSE,
+  echo = TRUE,
   message = FALSE,
   warning = FALSE
 )
@@ -26,6 +26,16 @@ library(ggplot2)
 library(ggthemes)
 library(ggthemes)
 library(bookdown)
+library(stringr)
+library(DT)
+library(kableExtra)
+```
+
+
+
+```{r data_sourcing}
+df1 <- read_csv(here::here("data/NCOV_cases_by_agegroup.csv"))
+df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
 ```
 
 # Data sources
@@ -38,16 +48,43 @@ library(bookdown)
    - The independent variables in the dataset are __not artificially or intentionally placed in specific units__ for the purpose of a study.
    - There is no scenario where only a specific group of people who are exposed to the virus are studied against the rest of the people who are not exposed to the virus which would have suggested an experimental data.
    - There is __no certain scientific claim__ that is expected to be validated using this dataset, as is usually the case for experimental data.
+ 
+3. Codebook for the current dataset can be referred to in the submitted list of files __within the "data" folder__.
    
-3. The unit of this current dataset is __the number of positive diagnosis cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the type of COVID test, data of diagnosis and the geographical region where the case was detected.
+4. The unit of this current dataset is __the number of positive diagnosis cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the __type of COVID test, data of diagnosis and the geographical region where the case was detected__.
 Some of the variables which could act as unique identifiers for the COVID-19 dataset are __diagnosis data,age group,post code and the total case count__. For the days with a single observed case in any of the locations (postal code) and age group, a person maybe uniquely identified. 
 
+5. The Victorian Government website contains the COVID-19 information on the number of cases for each local government area and age groups as __separate datasets__. Ideally, we would want the __geographical and demographical data to be stored within one single dataset__ so that we can analyse where were the restrictions enforced and which group of people were affected by these restrictions.
+
+Following were the data wrangling steps applied to obtain the finalized dataset:
+
+- Datasets of COVID-19 cases __granulated by local government areas and age groups__ are considered for creation of the required dataset.
+- Remove unnecessary string characters such as "_" in agegroup column.
+- Transform the agegroup dataframe from the long format to a wide format.
+- Perform a join between the local government area and the agegroup dataset on the diagnosis date.
+
+Table \@ref(tab:datasetjoin) illustrates the new dataset created after joining the two dataframes.
+
+```{r datasetjoin}
+
+df1$agegroup <- str_replace(df1$agegroup,"_","")
+df1_wide <- pivot_wider(data=df1, id_cols = diagnosis_date,
+                        names_from = agegroup, values_from = Total_case_count)
+
+ordered_cols <- c("diagnosis_date","0-9","10-19","20-29",
+                  "30-39","40-49","50-59",
+                  "60-69","70-79","80-89","90+","NA" )
+
+df1_wide <- df1_wide[,ordered_cols]
+
+df_combined <- df2 %>% left_join(df1_wide, by ="diagnosis_date") %>% arrange(diagnosis_date)
+
+head(df_combined) %>%
+kable(caption = 'Mean economic statistics of Melbourne electorate based on 2021 Census data',booktabs = TRUE) %>% 
+  kable_styling(bootstrap_options = c("bordered","hover")) %>%
+  row_spec(0,background="rgb(172,175,145)",color='black',font_size = 18,align = 'c')
 
 
-```{r data_sourcing}
-df1 <- read_csv(here::here("data/NCOV_cases_by_agegroup.csv"))
-df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
-df3 <- read_csv(here::here("data/NCOV_COVID_Cases_by_Source_until_20220630.csv"))
 ```
 
 
@@ -65,15 +102,12 @@ face_mask <- ymd("2020/07/27") # Mandatory facemasks
 
 plot_interval <- interval(start_date, end_date)
 
-df2 <- df2 %>% filter(diagnosis_date %within% plot_interval) %>% mutate(Cumulative_case_count = cumsum(Total_case_count))
+df_combined <- df_combined %>% filter(diagnosis_date %within% plot_interval) %>% mutate(Cumulative_case_count = cumsum(Total_case_count))
 
-df_daily <- df2 %>% filter(diagnosis_date %within% plot_interval) %>% group_by(diagnosis_date)  %>% summarise(Cases_per_day = sum(Total_case_count))
+df_daily <- df_combined %>% filter(diagnosis_date %within% plot_interval) %>% group_by(diagnosis_date)  %>% summarise(Cases_per_day = sum(Total_case_count))
 
-pl1 <- ggplot(data = df2, 
-              aes(x = diagnosis_date, 
-                  y = Cumulative_case_count)) + geom_line()
 
-pl2 <- ggplot(data = df_daily,
+pl1 <- ggplot(data = df_daily,
               aes(x = diagnosis_date,
                   y = Cases_per_day)) +
   geom_line() + theme_clean() +
@@ -81,60 +115,34 @@ pl2 <- ggplot(data = df_daily,
   ggtitle("Cases observed per day in 2020") +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title = element_text(face = 'bold')) +
-  annotate(
-    "segment",
-    x = local_ld,
-    xend = local_ld,
-    y = 0,
-    yend = 700,
-    colour = "red",
-    linetype = 1,
-    size = 2
+  annotate("segment",x = local_ld,
+    xend = local_ld,y = 0,
+    yend = 700,colour = "red",
+    linetype = 1,size = 2
   ) +
-  annotate(
-    "segment",
-    x = local_ld - days(6),
-    y = 500,
-    xend = local_ld ,
-    yend = 400 ,
-    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  annotate("segment",x = local_ld - days(6),
+    y = 500,xend = local_ld ,
+    yend = 400 ,arrow = arrow(type = "closed", 
+                              length = unit(0.02, "npc"))
   ) +
-  annotate(
-    "text",
-    x = local_ld - days(15),
-    y = 520,
-    colour = "black",
-    label = 'Lockdowns implemented \n from 30/06/2020',
-    size = unit(3, "pt")
+  annotate("text",x = local_ld - days(15),
+    y = 520,colour = "black",
+    label = 'Lockdowns implemented \n from 30/06/2020',size = unit(3, "pt")
   ) +
-  annotate(
-    "segment",
-    x = face_mask,
-    xend = face_mask,
-    y = 0,
-    yend = 700,
-    colour = "blue",
-    linetype = 1,
-    size = 2
+  annotate("segment",x = face_mask,
+    xend = face_mask,y = 0,
+    yend = 700,colour = "blue",
+    linetype = 1,size = 2
   ) +
-  annotate(
-    "segment",
-    x = face_mask - days(6),
-    y = 500,
-    xend = face_mask ,
-    yend = 400 ,
-    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
+  annotate("segment",x = face_mask - days(6),
+    y = 500,xend = face_mask ,
+    yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))
   ) +
-  annotate(
-    "text",
-    x = face_mask - days(12),
-    y = 530,
-    colour = "black",
-    label = 'Mandatory facemasks \n from 27/07/2020',
-    size = unit(3, "pt")
+  annotate("text",x = face_mask - days(12),
+    y = 530,colour = "black",
+    label = 'Mandatory facemasks \n from 27/07/2020',size = unit(3, "pt")
   )
-pl2
-
+pl1
 
 
 ```
@@ -163,62 +171,27 @@ pl3 <- ggplot(data = df_rate,
   ggtitle("7-day growth rate of cases \n in 2020") +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title = element_text(face = 'bold')) +
-  annotate(
-    "segment",
-    x = local_ld,
-    xend = local_ld,
-    y = 0,
-    yend = 700,
-    colour = "red",
-    linetype = 1,
-    size = 2
-  ) +
-  annotate(
-    "segment",
-    x = local_ld - days(6),
-    y = 500,
-    xend = local_ld ,
-    yend = 400 ,
-    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
-  ) +
-  annotate(
-    "text",
-    x = local_ld - days(15),
-    y = 520,
-    colour = "black",
-    label = 'Lockdowns implemented \n from 30/06/2020',
-    size = unit(3, "pt")
-  ) +
-  annotate(
-    "segment",
-    x = face_mask,
-    xend = face_mask,
-    y = 0,
-    yend = 700,
-    colour = "blue",
-    linetype = 1,
-    size = 2
-  ) +
-  annotate(
-    "segment",
-    x = face_mask - days(6),
-    y = 500,
-    xend = face_mask ,
-    yend = 400 ,
-    arrow = arrow(type = "closed", length = unit(0.02, "npc"))
-  ) +
-  annotate(
-    "text",
-    x = face_mask - days(12),
-    y = 530,
-    colour = "black",
+  annotate("segment",x = local_ld,
+    xend = local_ld,y = 0,
+    yend = 700,colour = "red",
+    linetype = 1,size = 2) +
+  annotate("segment",x = local_ld - days(6),
+    y = 500,xend = local_ld ,
+    yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = local_ld - days(15),y = 520,
+    colour = "black",label = 'Lockdowns implemented \n from 30/06/2020',size = unit(3, "pt")) +
+  annotate("segment",x = face_mask,xend = face_mask,
+    y = 0,yend = 700,colour = "blue",linetype = 1,size = 2) +
+  annotate("segment",x = face_mask - days(6),y = 500,
+    xend = face_mask ,yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = face_mask - days(12),y = 530,colour = "black",
     label = 'Mandatory facemasks \n from 27/07/2020',
     size = unit(3, "pt")
   )
 pl3
 
 ```
-As we can observe that the primary difference between the figures \@ref(fig:caseplot) and \@ref(fig:growthrateplot) is the smoothness of the lineplot. As we are using a 7-day mean growth rate instead of the actual daily cases, __the sudden spikes as a result of the peaks and troughs were greatly reduced__. This aids the __interpretability__ of the plot and allows for __better insights.__ 
+As we can observe,the primary difference between the figures \@ref(fig:caseplot) and \@ref(fig:growthrateplot) is the smoothness of the lineplot. As we are using a 7-day mean growth rate instead of the actual daily cases, __the sudden spikes in the number of cases as a result of the peaks and troughs were greatly reduced__. This aids the __interpretability__ of the plot and allows for __better insights.__ 
 
 
 Based on the 7-day growth rate of cases in 2020 as depicted by figure \@ref(fig:growthrateplot), we observe that while the lockdowns were implemented fairly early into the start of the pandemic, the __cases were observed to grow exponentially but started to slightly dip around mid July__. After the __start of the second intervention (mandatory masks), the growth rate continued to rise but was observed to drop from early August__ until the end of the time of study.
