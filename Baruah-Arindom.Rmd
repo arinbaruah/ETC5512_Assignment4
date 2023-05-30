@@ -5,6 +5,8 @@ author: Arindom Baruah, 32779267, abar0090@student.monash.edu
 date: '`r Sys.Date()`'
 output: 
   bookdown::html_document2:
+    biblio-style: "apalike"
+    link-citations: true
     css: monashreport.css
     includes:
       before_body: header.html
@@ -29,6 +31,7 @@ library(bookdown)
 library(stringr)
 library(DT)
 library(kableExtra)
+library(deSolve)
 ```
 
 
@@ -148,7 +151,7 @@ pl1
 ```
 
 
-```{r growthrate}
+```{r avgratecalc}
 df_rate <- df_daily %>%
   mutate(
     growth_rate = slider::slide_dbl(
@@ -254,20 +257,212 @@ Based on the 7-day growth rate of cases in 2020 as depicted by figure \@ref(fig:
 
 The growth rate $g$ and the effective transmission number $R(t)$ are very closely related to each other. To understand this relation, we can interpret $R(t)$ by its statistical effect on the population. The effective transmission number $R(t)$ indicates that __on average, how many people may be infected when an infectious person comes in contact with them__.
 
-For __$R(t)$ > 1__, on average, each infectious person infects more than one person __leading to an exponential growth of cases__.
-For __$R(t)$ = 1__, on average, each infectious person infects one person. __Under such a circumstance, the daily cases start stagnating and flattening.__
-For __$R(t)$ < 1__, on average, each infectious person infects less than one person __leading to an exponential drop of cases__.
+- For __$R(t)$ > 1__, on average, each infectious person infects more than one person __leading to an exponential growth of cases__.\
+- For __$R(t)$ = 1__, on average, each infectious person infects one person. __Under such a circumstance, the daily cases start stagnating and flattening.__ \
+- For __$R(t)$ < 1__, on average, each infectious person infects less than one person __leading to an exponential drop of cases__. \
 
 The value of $R(t)$ can be __significantly altered through interventions such as lockdowns, facemasks and vaccinations__. Hence, the growth rate of cases are accordingly observed to rise or fall with the change in $R(t)$.
 
 
-### Part B
+### Part B {#label1}
 
 The relation between the growth rate $g$ and the effective transmission number $R(t)$ in the given equation is dependent on each other through the average infectious period $T$. This equation gives us an estimation of the growth rate of cases.
 
-On the other hand, the relation between the growth rate $g$ and the effective transmission number $R(t)$ as observed in class gives us an estimate of the effective transmission number $R(t)$. The equation is based on the assumption that there is no variance in the generation time/average infectious period. The same equation based on the nomenclature provided here can be written as follows.
+The important thresholds which allow us to understand the current state of the disease are as follows :
 
-$\boxed{R(t) =  e^{gT}}$
+- If __$g > 0$__, the epidemic undergoes an __exponential rise in daily cases__. \
+- If __$g = 0$__, the number of cases start __stagnating and the daily case plot start flattening__. \
+- If __$g < 0$__, the epidemic undergoes an __exponential drop in daily cases__. \
+
+On the other hand, the relation between the growth rate $g$ and the effective transmission number $R(t)$ as observed in class gives us an __estimate of the effective transmission number $R(t)$__. The equation is based on the assumption that there is no variance in the generation time(or average infectious period). The same equation based on the nomenclature provided here can be written as follows. 
+
+$\boxed{R(t) =  e^{gT}}$ 
+
+The thresholds for the above equation are as follows:
+
+- For __$R(t)$ > 1__, on average, each infectious person infects more than one person __leading to an exponential growth of cases__.\
+- For __$R(t)$ = 1__, on average, each infectious person infects one person. __Under such a circumstance, the daily cases start stagnating and flattening.__ \
+- For __$R(t)$ < 1__, on average, each infectious person infects less than one person __leading to an exponential drop of cases__. \
+
+## <u> Infectious disease modeling using the S.E.I.R. model </u>
+
+### Population compartmentalization
+
+In epidemiology, an infectious disease maybe modeled by a set of specific assumptions and the result of ordinary differential equations. These models are termed as compartmental models as they are used to divide the entire population into specific compartments. \
+
+In any infectious disease modeling, it is extremely important to __estimate the delay of infection notification__. Based on the study by @lauer2020qifang , __the incubation period__, which is the delay between the inoculation (contact with virus) and symptoms is __approximately 5 days__. Additionally, based on the information by the __Department of Health and Human Services (DHHS) Victoria__, it may [take around 1-3 days](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwjJl7bM7Jz_AhUngFYBHTBvAHQQFnoECAkQAw&url=https%3A%2F%2Fwww.dhhs.vic.gov.au%2Ftesting-coronavirus-english-accessible%23%3A~%3Atext%3DHow%2520long%2520does%2520it%2520take%2Chospital%2520where%2520you%2520got%2520tested.&usg=AOvVaw2RTE4ImgWjp0s3mWv-RXjN) to get an outcome of the result.
+
+As a result, a close estimation of the delay in notification of a positive case can significantly aid the accurate modeling of the infectious disease. The S.E.I.R model attempts to do so by compartmentalizing the total population into the following four groups :
+
+- __S (Symptomatic)__ : Susceptible people, those who can be infected. \
+- __E (Exposed)__ : Individuals who are infected but not infectious at the moment. \
+- __I (Infection)__ : Infected and infectious people, those who have got and can spread the virus. \
+- __R (Recovered)__ : People who have recovered and cannot infect further. Consequently, they don't participate in the dynamics any further. \
+
+
+### Intervention incorporation in the S.E.I.R. model
+
+Using the S.E.I.R. model, the reproduction number, $R(o)$ helps us understand the average number of secondary infections produced by a typical infectious individual __in a completely susceptible population__. The threshold for $R(o)$ and $R_{eff}$ provide us similar insights which have been delineated in section \@ref(label1).
+
+In order to understand how the value of $R(o)$ changes for various interventions, we can divide the time period of analysis into the following segments:
+
+- Phase 1 : __No intervention period__ from `r start_date` to `r local_ld`.
+- Phase 2 : __Initial intervention (Lockdowns)__ from `r local_ld` to `r face_mask`
+- Phase 3 : __Additional intervention (Lockdowns + Facemasks)__ from `r face_mask` to `r end_date`.
+
+To understand the effect of the interventions on the spread of the disease, $R(o)$ for __each of above timeline phases will be calculated and compared to each other__ to observe how the disease spread varied.
+
+## <u> Ordinary Differential Equation for solving the model </u>
+
+```{r ode, message=F, eval=T}
+
+
+COVID_uncontrolled <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), { # Let's us refer to named objects without square brackets
+    N <- S + E + I + R # Total population size
+    dSdt <- -beta * S * I / N
+    dEdt <- beta * S * I / N - sigma * E
+    dIdt <- sigma * E - gamma * I
+    dRdt <- gamma * I
+    dIncidencedt <- sigma * E
+    return(list(
+      c(dSdt, dEdt, dIdt, dRdt, dIncidencedt) 
+    ))
+  })
+}
+```
+
+
+
+## <u> Initial parameter selection and solution </u>
+
+Following code-chunk contains the initial guess parameters to be applied to the model.
+
+```{r initialize-params}
+
+parameters <- c(
+  "beta" = 2 / 3,
+  "sigma" = 1 / 5,
+  "gamma" = 1 / 6 # Gives an R0 (beta/gamma) of 4
+)
+
+N <- 6.681e6 #Population of Victoria
+initial_infected <- 20
+initial_state <-
+  c("S" = N - initial_infected,
+    "E" = 0,
+    "I" = initial_infected,
+    "R" = 0,
+    "incidence" = 0)
+
+
+tidy_model <- function(ode_output, start_date) {
+  as_tibble(ode_output) %>%
+    mutate(
+      date = as.Date(start_date + days(time)),
+      daily_incidence = c(0, diff(incidence))
+    )
+}
+```
+
+
+
+
+```{r}
+
+
+negative_log_likelihood <- function(transformed_parameters, data, state, times, func, other_parameters) {
+  # Untransform parameters:
+  beta <- exp(transformed_parameters["R0"]) * other_parameters["gamma"]
+  names(beta) <- "beta"
+
+  parameters <- c(beta, other_parameters)
+  out_ode <- ode(
+    y = state,
+    times = as.numeric(difftime(times, times[1], units = "days")),
+    func = func,
+    parms = parameters
+  ) %>%
+    tidy_model(start_date = times[1])
+
+  -sum(dpois(
+    x = data$Cases_per_day[-1],
+    lambda = out_ode$daily_incidence[-1],
+    log = TRUE
+  ))
+}
+```
+
+
+
+
+
+```{r no-intervention, eval=T, include=T}
+
+
+plot_interval <- interval(start_date, local_ld) #Time interval for no interventions
+
+solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
+initial_transformed_parameters <- log(c("R0" = 2))
+
+
+optimum_mle <- optim(
+  par = initial_transformed_parameters,
+  fn = negative_log_likelihood,
+  data = df_rate,
+  state = initial_state,
+  times = solve_times,
+  func = COVID_uncontrolled,
+  other_parameters = c(parameters["gamma"], parameters["sigma"])
+)
+
+optimum_mle
+```
+
+
+```{r first-intervention}
+
+
+plot_interval <- interval(local_ld, face_mask) #Time interval for first set of interventions
+
+solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
+initial_transformed_parameters <- log(c("R0" = 2))
+
+
+optimum_mle <- optim(
+  par = initial_transformed_parameters,
+  fn = negative_log_likelihood,
+  data = df_rate,
+  state = initial_state,
+  times = solve_times,
+  func = COVID_uncontrolled,
+  other_parameters = c(parameters["gamma"], parameters["sigma"])
+)
+
+optimum_mle
+```
+
+```{r second-intervention}
+
+plot_interval <- interval(face_mask, end_date) #Time interval for second set of interventions
+
+solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
+initial_transformed_parameters <- log(c("R0" = 2))
+
+
+optimum_mle <- optim(
+  par = initial_transformed_parameters,
+  fn = negative_log_likelihood,
+  data = df_rate,
+  state = initial_state,
+  times = solve_times,
+  func = COVID_uncontrolled,
+  other_parameters = c(parameters["gamma"], parameters["sigma"])
+)
+
+optimum_mle
+
+```
 
 
 # 📉 Data curation
