@@ -147,7 +147,6 @@ pl1
 
 ```
 
-## <u> 7-day growth rate of cases </u>
 
 ```{r growthrate}
 df_rate <- df_daily %>%
@@ -161,14 +160,14 @@ df_rate <- df_daily %>%
   )
 ```
 
-```{r growthrateplot,fig.cap="7-day growth rate of cases observed per day",fig.align='center',include=TRUE }
+```{r avgrateplot,fig.cap="7-day average rise of cases observed per day",fig.align='center',include=TRUE }
 
-pl3 <- ggplot(data = df_rate,
+pl2 <- ggplot(data = df_rate,
               aes(x = diagnosis_date,
                   y = growth_rate)) +
   geom_line(size=1.5) + theme_clean() +
   labs(x = "Diagnosis date", y = "Total cases per day") +
-  ggtitle("7-day growth rate of cases \n in 2020") +
+  ggtitle("7-day rolling average of cases per day \n in 2020") +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title = element_text(face = 'bold')) +
   annotate("segment",x = local_ld,
@@ -188,13 +187,87 @@ pl3 <- ggplot(data = df_rate,
     label = 'Mandatory facemasks \n from 27/07/2020',
     size = unit(3, "pt")
   )
-pl3
+pl2
 
 ```
-As we can observe,the primary difference between the figures \@ref(fig:caseplot) and \@ref(fig:growthrateplot) is the smoothness of the lineplot. As we are using a 7-day mean growth rate instead of the actual daily cases, __the sudden spikes in the number of cases as a result of the peaks and troughs were greatly reduced__. This aids the __interpretability__ of the plot and allows for __better insights.__ 
+As we can observe,the primary difference between the figures \@ref(fig:caseplot) and \@ref(fig:avgrateplot) is the smoothness of the lineplot. As we are using a 7-day mean growth rate instead of the actual daily cases, __the sudden spikes in the number of cases as a result of the peaks and troughs were greatly reduced__. This aids the __interpretability__ of the plot and allows for __better insights.__ 
 
 
-Based on the 7-day growth rate of cases in 2020 as depicted by figure \@ref(fig:growthrateplot), we observe that while the lockdowns were implemented fairly early into the start of the pandemic, the __cases were observed to grow exponentially but started to slightly dip around mid July__. After the __start of the second intervention (mandatory masks), the growth rate continued to rise but was observed to drop from early August__ until the end of the time of study.
+## <u> 7-day growth rate of cases </u>
+
+```{r growthrateplot,fig.cap="Growth rate of cases within the analysis period",fig.align='center'}
+
+date_interval <- interval(start = start_date,end = end_date)
+df_growth_rate <- df_combined %>%
+  filter(diagnosis_date %within% date_interval) %>% #Restrict to the second wave
+  group_by(diagnosis_date) %>%
+  summarise(n=n()) %>%
+  mutate(
+    growth_rate=slider::slide_dbl(
+      .x = n,
+.f = function(v) {
+log(v[7]/v[1]) / 7 #Seven-day growth rate
+      },
+      .before=8, #Only look into the past
+      .after = 0
+) )
+
+pl3 <- ggplot(data=df_growth_rate,aes(x=diagnosis_date,y=growth_rate)) +
+  geom_line() + theme_clean() +
+  labs(x = "Diagnosis date", y = "Growth rate") +
+  ggtitle("7-day growth rate of cases \n in 2020") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title = element_text(face = 'bold')) + geom_smooth(color='darkgreen') +
+    annotate("segment",x = local_ld,
+    xend = local_ld,y = -0.1,
+    yend = 0.3,colour = "red",
+    linetype = 1,size = 2) +
+  annotate("segment",x = local_ld - days(6),
+    y = 0.3,xend = local_ld ,
+    yend = 0.25 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = local_ld - days(15),y = 0.32,
+    colour = "black",label = 'Lockdowns implemented \n from 30/06/2020',size = unit(3, "pt")) +
+  annotate("segment",x = face_mask,xend = face_mask,
+    y = -0.1,yend = 0.3,colour = "blue",linetype = 1,size = 2) +
+  annotate("segment",x = face_mask - days(6),y = 0.3,
+    xend = face_mask ,yend = 0.25 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = face_mask - days(12),y = 0.33,colour = "black",
+    label = 'Mandatory facemasks \n from 27/07/2020',
+    size = unit(3, "pt"))
+
+  
+pl3
+```
+
+
+
+Based on the 7-day growth rate of cases in 2020 as depicted by figure \@ref(fig:growthrateplot), following are the key observations:
+
+- There was a __rising trend of cases__ between the start of the analysis period to the first intervention (lockdown implementation from `r local_ld`).
+- After the implementation of the first intervention which are the local lockdowns from `r local_ld`, there was a __drop in the growth rate observed__.
+- After the implementation of the second intervention which is the mandatory facemasks from `r face_mask`, soon after the __growth rate dropped below 0__ as a result of which, the __overall positive cases started to drop__.
+
+## <u> Relation between growth rate and effective transmission number </u>
+
+
+### Part A
+
+The growth rate $g$ and the effective transmission number $R(t)$ are very closely related to each other. To understand this relation, we can interpret $R(t)$ by its statistical effect on the population. The effective transmission number $R(t)$ indicates that __on average, how many people may be infected when an infectious person comes in contact with them__.
+
+For __$R(t)$ > 1__, on average, each infectious person infects more than one person __leading to an exponential growth of cases__.
+For __$R(t)$ = 1__, on average, each infectious person infects one person. __Under such a circumstance, the daily cases start stagnating and flattening.__
+For __$R(t)$ < 1__, on average, each infectious person infects less than one person __leading to an exponential drop of cases__.
+
+The value of $R(t)$ can be __significantly altered through interventions such as lockdowns, facemasks and vaccinations__. Hence, the growth rate of cases are accordingly observed to rise or fall with the change in $R(t)$.
+
+
+### Part B
+
+The relation between the growth rate $g$ and the effective transmission number $R(t)$ in the given equation is dependent on each other through the average infectious period $T$. This equation gives us an estimation of the growth rate of cases.
+
+On the other hand, the relation between the growth rate $g$ and the effective transmission number $R(t)$ as observed in class gives us an estimate of the effective transmission number $R(t)$. The equation is based on the assumption that there is no variance in the generation time/average infectious period. The same equation based on the nomenclature provided here can be written as follows.
+
+$\boxed{R(t) =  e^{gT}}$
 
 
 # 📉 Data curation
