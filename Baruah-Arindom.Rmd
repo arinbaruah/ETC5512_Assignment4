@@ -281,17 +281,17 @@ The value of $R(t)$ can be __significantly altered through interventions such as
 
 ### Part B {#label1}
 
-The relation between the growth rate $g$ and the effective transmission number $R(t)$ in the given equation is dependent on each other through the average infectious period $T$. This equation gives us an estimation of the growth rate of cases.
+The relation between the __growth rate__ $g$ and the __effective transmission number__ $R(t)$ in the given equation is dependent on each other through the __average infectious period__ $T$. This equation gives us an estimation of the growth rate of cases.
 
 The important thresholds which allow us to understand the current state of the disease are as follows :
 
 - If __$g > 0$__, the epidemic undergoes an __exponential rise in daily cases__. \
-- If __$g = 0$__, the number of cases start __stagnating and the daily case plot start flattening__. \
+- If __$g = 0$__, the number of cases start __stagnating and the daily case plot starts flattening__. \
 - If __$g < 0$__, the epidemic undergoes an __exponential drop in daily cases__. \
 
 On the other hand, the relation between the growth rate $g$ and the effective transmission number $R(t)$ as observed in class gives us an __estimate of the effective transmission number $R(t)$__. The equation is based on the assumption that there is no variance in the generation time(or average infectious period). The same equation based on the nomenclature provided here can be written as follows. 
 
-$\boxed{R(t) =  e^{gT}}$ 
+$$\boxed{R(t) =  e^{gT}}$$ 
 
 The thresholds for the above equation are as follows:
 
@@ -325,59 +325,13 @@ In order to understand how the value of $R(o)$ changes for various interventions
 - Phase 2 : __Initial intervention (Lockdowns)__ from `r local_ld` to `r face_mask`
 - Phase 3 : __Additional intervention (Lockdowns + Facemasks)__ from `r face_mask` to `r end_date`.
 
-To understand the effect of the interventions on the spread of the disease, $R(o)$ for __each of above timeline phases will be calculated and compared to each other__ to observe how the disease spread varied.
-
-## <u> Ordinary Differential Equation for solving the model </u>
-
-```{r ode, message=F, eval=T}
+To understand the effect of the interventions on the spread of the disease, the value of $\beta$ will be altered to account for the reduction of cases in __each of above timeline phases__.
 
 
-COVID_uncontrolled <- function(t, state, parameters) {
-  with(as.list(c(state, parameters)), { # Let's us refer to named objects without square brackets
-    N <- S + E + I + R # Total population size
-    dSdt <- -beta * S * I / N
-    dEdt <- beta * S * I / N - sigma * E
-    dIdt <- sigma * E - gamma * I
-    dRdt <- gamma * I
-    dIncidencedt <- sigma * E
-    return(list(
-      c(dSdt, dEdt, dIdt, dRdt, dIncidencedt) 
-    ))
-  })
-}
-```
+### Ordinary Differential Equation for solving the model 
 
 
-
-## <u> Initial parameter selection and solution </u>
-
-Following are the initial guess parameters to be applied to the model:
-
-- $\beta = \frac36$ \
-- $\sigma = \frac1{10}$ \
-- $\gamma - \frac13$ \
-- Initial infected cases = 20
-- Population of Victoria = 6.681 Million
-
-```{r initialize-params}
-
-solve_times <- seq(int_start(date_interval), int_end(date_interval), by = "1 day")
-
-parameters <- c(
-  "beta" = 3/6,
-  "sigma" = 1 / 10,
-  "gamma" = 1 / 3 # Gives an R0 (beta/gamma) of 1.5
-)
-
-N <- 6.681e6 #Population of Victoria
-initial_infected <- 20
-initial_state <-
-  c("S" = N - initial_infected,
-    "E" = 0,
-    "I" = initial_infected,
-    "R" = 0,
-    "incidence" = 0)
-
+```{r tidy-model}
 
 tidy_model <- function(ode_output, start_date) {
   as_tibble(ode_output) %>%
@@ -386,38 +340,26 @@ tidy_model <- function(ode_output, start_date) {
       daily_incidence = c(0, diff(incidence))
     )
 }
-```
-
-Based on the above initial parameters, the following code-chunk contains the solution of the ordinary differential equation to calculate the predicted number of diagnosed cases. Table \@ref(tab:odeoutput) lists out the initial rows of the output datafram while figure \@ref(fig:fitact) depicts the comparison between the actual number of cases and the modeled number of cases using the S.E.I.R. model with the initial chosen parameters. 
-
-```{r odeoutput}
-
-out_init <- ode(
-   y = initial_state,
-   times = as.numeric(difftime(solve_times, solve_times[1], units = "days")),
-   func = COVID_uncontrolled,
-   parms = parameters
-) 
-
-head(out_init) %>%
-kable(caption = 'ODE output',booktabs = TRUE) %>% 
-  kable_styling(bootstrap_options = c("bordered","hover")) %>%
-  row_spec(0,background="rgb(172,175,145)",color='black',font_size = 18,align = 'c')
 
 
-tidy_output <- tidy_model(out_init, int_start(date_interval))
+solve_times <- seq(int_start(date_interval), int_end(date_interval), by = "1 day")
+
+
 ```
 
 
 
-```{r fitact,fig.cap="Comparison between actual and modelled cases in Victoria",fig.align='center'}
-pl4 <- ggplot() + geom_col(data= df_rate %>% filter(diagnosis_date < ymd("20200815")), 
-                           aes(x=diagnosis_date,
-                               y=Cases_per_day),
-                           fill='darkblue') + 
-  geom_point(data = tidy_output %>% filter(date < ymd("20200815")),aes(x=date,y=incidence),color='red') + 
-  labs(x='Diagnosis date',y='Number of cases') + theme_clean() + ggtitle("Comparison between actual and modelled cases in Victoria") + theme(plot.title = element_text(hjust = 0.5))
-pl4
+
+```{r logit, ,echo=FALSE}
+logit <- function(x) {
+  return(log(x / (1 - x)))
+}
+
+# And its inverse
+inverse.logit <- function(x) {
+  return(exp(x) / (1 + exp(x)))
+}
+
 ```
 
 
@@ -425,15 +367,71 @@ pl4
 
 
 
-```{r}
+### Initial parameter selection and solution 
+
+Following are the initial guess parameters to be applied to the model:
+
+- __$\beta = \frac36$__ \
+- __$\sigma = \frac1{10}$__ \
+- __$\gamma = \frac13$__ \
+- __Initial infected cases = 20__
 
 
-negative_log_likelihood <- function(transformed_parameters, data, state, times, func, other_parameters) {
-  # Untransform parameters:
+```{r initialize}
+start_date <- ymd("2020/06/01") #Start date of analysis
+end_date <- ymd("2020/09/13") #End date of analysis
+local_ld <- ymd("2020/06/30") #Local lockdown initiates
+face_mask <- ymd("2020/07/27") # Mandatory facemasks
+
+date_interval <- interval(start_date, end_date)
+
+df_sum <- df2 %>% filter (diagnosis_date %within% plot_interval) %>%  group_by(diagnosis_date) %>% summarise(Total_case_count =  sum(Total_case_count))
+
+N <- sum(df_sum$Total_case_count)
+
+```
+
+
+```{r interventions}
+
+initial_infected <- 20
+initial_state <- c("S" = N - initial_infected, "E" = 0, "I" = initial_infected, "R" = 0, "incidence" = 0)
+COVID_withemergency <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    N <- S + E + I + R 
+
+    if ((t > 29) | (t<=56)) {# First intervention
+      beta <- beta * emergency_efficacy
+    }
+    
+      if (t > 56) { # Second intervention
+      beta <- beta * emergency_efficacy * 1.5
+    }
+
+    dSdt <- -beta * S * I / N
+    dEdt <- beta * S * I / N - sigma * E
+    dIdt <- sigma * E - gamma * I
+    dRdt <- gamma * I
+    dIncidencedt <- sigma * E
+    return(list(
+      c(dSdt, dEdt, dIdt, dRdt, dIncidencedt)
+    ))
+  })
+}
+
+```
+
+
+
+
+```{r neg-log_rep, echo=FALSE}
+negative_log_likelihood_emergency <- function(transformed_parameters, data, state, times, func, other_parameters) {
+
   beta <- exp(transformed_parameters["R0"]) * other_parameters["gamma"]
   names(beta) <- "beta"
-
-  parameters <- c(beta, other_parameters)
+  emergency_efficacy <- inverse.logit(transformed_parameters["emergency_efficacy"])
+  names(emergency_efficacy) <- "emergency_efficacy"
+  parameters <- c(beta, emergency_efficacy, other_parameters)
   out_ode <- ode(
     y = state,
     times = as.numeric(difftime(times, times[1], units = "days")),
@@ -441,85 +439,210 @@ negative_log_likelihood <- function(transformed_parameters, data, state, times, 
     parms = parameters
   ) %>%
     tidy_model(start_date = times[1])
-
   -sum(dpois(
-    x = data$Cases_per_day[-1],
+    x = data$Total_case_count[-1],
     lambda = out_ode$daily_incidence[-1],
     log = TRUE
   ))
 }
+
 ```
 
 
 
 
 
-```{r no-intervention, eval=T, include=T}
+
+```{r odeoutput}
 
 
-plot_interval <- interval(start_date, local_ld) #Time interval for no interventions
-
-solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
-initial_transformed_parameters <- log(c("R0" = 2))
-
-
+initial_transformed_parameters <- c("R0" = log(2), "emergency_efficacy" = logit(0.5))
+parameters <- c("gamma" = 1 / 6, "sigma" = 1 / 5)
 optimum_mle <- optim(
   par = initial_transformed_parameters,
-  fn = negative_log_likelihood,
-  data = df_rate,
+  fn = negative_log_likelihood_emergency,
+  data = df_sum,
   state = initial_state,
   times = solve_times,
-  func = COVID_uncontrolled,
+  func = COVID_withemergency,
   other_parameters = c(parameters["gamma"], parameters["sigma"])
 )
+optimal_parameters_R0 <- c(
+  exp(optimum_mle$par["R0"]) * parameters["gamma"],
+  inverse.logit(optimum_mle$par["emergency_efficacy"]),
+  parameters["gamma"],
+  parameters["sigma"]
+)
+names(optimal_parameters_R0)[1] <- "beta"
 
-optimum_mle
+
+
+optimal_solution <- ode(
+  y = initial_state,
+  times = as.numeric(difftime(solve_times, solve_times[1], units = "days")),
+  func = COVID_withemergency,
+  parms = optimal_parameters_R0
+) %>%
+  tidy_model(start_date = solve_times[1])
+
+
+
+head(optimal_solution) %>%
+kable(caption = 'ODE output',booktabs = TRUE) %>% 
+  kable_styling(bootstrap_options = c("bordered","hover")) %>%
+  row_spec(0,background="rgb(172,175,145)",color='black',font_size = 18,align = 'c')
+
+
 ```
 
 
-```{r first-intervention}
 
 
-plot_interval <- interval(local_ld, face_mask) #Time interval for first set of interventions
-
-solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
-initial_transformed_parameters <- log(c("R0" = 2))
 
 
+
+```{r eval=TRUE}
+
+
+optimal_parameters_R0 <- c(
+  exp(optimum_mle$par["R0"]) * parameters["gamma"],
+  inverse.logit(optimum_mle$par["emergency_efficacy"]),
+  parameters["gamma"],
+  parameters["sigma"]
+)
+names(optimal_parameters_R0)[1] <- "beta"
+
+initial_transformed_parameters <- c("R0" = log(2), "emergency_efficacy" = logit(0.5))
+parameters <- c("gamma" = 1/6, "sigma" = 1 / 5)
 optimum_mle <- optim(
   par = initial_transformed_parameters,
-  fn = negative_log_likelihood,
-  data = df_rate,
+  fn = negative_log_likelihood_emergency,
+  data = df_sum,
   state = initial_state,
   times = solve_times,
-  func = COVID_uncontrolled,
+  func = COVID_withemergency,
   other_parameters = c(parameters["gamma"], parameters["sigma"])
 )
-
-optimum_mle
 ```
 
-```{r second-intervention}
-
-plot_interval <- interval(face_mask, end_date) #Time interval for second set of interventions
-
-solve_times <- seq(int_start(plot_interval), int_end(plot_interval), by = "1 day")
-initial_transformed_parameters <- log(c("R0" = 2))
 
 
-optimum_mle <- optim(
-  par = initial_transformed_parameters,
-  fn = negative_log_likelihood,
-  data = df_rate,
-  state = initial_state,
-  times = solve_times,
-  func = COVID_uncontrolled,
-  other_parameters = c(parameters["gamma"], parameters["sigma"])
-)
 
-optimum_mle
+
+
+
+Based on the above initial parameters, the following code-chunk contains the solution of the ordinary differential equation to calculate the predicted number of diagnosed cases. Table \@ref(tab:odeoutput) lists out the initial rows of the output datafram while figure \@ref(fig:fitact) depicts the comparison between the actual number of cases and the modeled number of cases using the S.E.I.R. model with the initial chosen parameters. 
+
+
+
+
+## <u> Implementatation of maximum likelihood function </u>
+
+The likelihood function allows us to understand that __given a set of initial parameters, how likely would the model output parameters match with the actual cases__. Alternatively, we can interpret the result of the likelihood function as __the probability that the actual values are within a distribution of our model output__.
+
+
+### Fixed and Estimated parameters
+
+In this model, following are the parameters that are __fixed__:
+
+- __Population of Victoria__ is assumed to remain constant during the course of the analysis. \
+- An __initial number of cases__ which helps the model create a baseline estimation. \
+- __Disease-specific parameters__: Specific parameters are obtained directly from literature studies. For example, the incubation period, infectious period, or transmission rate for a particular disease may be fixed based on existing research. As a result, the coefficient $\sigma$, which corresponds to the __corresponds to the inverse of the average incubation period__ of the disease can be fixed.
+- __Time-period for recovery__ of a person after being infected maybe considered to be constant and not change over time. Hence, $\gamma$ can be considered to be a fixed parameter.
+
+In this model, following are the parameters that are to be __estimated__:
+
+- Initial parameters such as the values of the susceptible (S), exposed (E), infected (I) and recovered (R) fractions of the population.
+- Transmission parameter $\beta$,which represents the transmission rate or the average number of secondary infections caused by an infected individual per unit of time will be estimated as this value can change with interventions applied.
+- Consequently, the value of growth reproduction number $R(o)$ as it is the ratio $\frac\beta{\gamma}$
+
+
+### Poisson likelihood function
+
+The maximum likelihood function using the Poisson likelihood method is applied to the current model, which is shown through the code chunk below:
+
+
+```{r neg-log}
+negative_log_likelihood_emergency <- function(transformed_parameters, data, state, times, func, other_parameters) {
+ 
+  beta <- exp(transformed_parameters["R0"]) * other_parameters["gamma"]
+  names(beta) <- "beta"
+  emergency_efficacy <- inverse.logit(transformed_parameters["emergency_efficacy"])
+  names(emergency_efficacy) <- "emergency_efficacy"
+  parameters <- c(beta, emergency_efficacy, other_parameters)
+  out_ode <- ode(
+    y = state,
+    times = as.numeric(difftime(times, times[1], units = "days")),
+    func = func,
+    parms = parameters
+  ) %>%
+    tidy_model(start_date = times[1])
+  -sum(dpois(
+    x = data$Total_case_count[-1],
+    lambda = out_ode$daily_incidence[-1],
+    log = TRUE
+  ))
+}
 
 ```
+
+
+
+
+```{r fitact, fig.cap="Comparison of modeled and actual cases with interventions",fig.align='center'}
+
+pl4 <- ggplot() +
+  geom_col(
+    aes(x = diagnosis_date, y = Total_case_count),
+    width = 1, fill = "skyblue", colour = "blue",
+    data = df_sum %>% filter (diagnosis_date %within% date_interval)
+  ) +
+  geom_point(
+    aes(x = date, y = daily_incidence),
+    data = optimal_solution
+  ) +
+    annotate("segment",x = local_ld,
+    xend = local_ld,y = 0,
+    yend = 700,colour = "red",
+    linetype = 1,size = 2) +
+  annotate("segment",x = local_ld - days(6),
+    y = 500,xend = local_ld ,
+    yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = local_ld - days(15),y = 520,
+    colour = "black",label = 'Lockdowns implemented \n from 30/06/2020',size = unit(3, "pt")) +
+  annotate("segment",x = face_mask,xend = face_mask,
+    y = 0,yend = 700,colour = "yellow",linetype = 1,size = 2) +
+  annotate("segment",x = face_mask - days(6),y = 500,
+    xend = face_mask ,yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+  annotate("text",x = face_mask - days(12),y = 530,colour = "black",
+    label = 'Mandatory facemasks \n from 27/07/2020',
+    size = unit(3, "pt")
+  ) + labs(x="Diagnosis date",y='Number of cases') + 
+  ggtitle("Comparison of modeled and actual cases with interventions \n in Victoria ") + theme_clean() + theme(plot.title = element_text(hjust = 0.5)) 
+
+pl4
+```
+
+Based on the estimated incidences  after utilising the Poisson's likelihood function and comparing it against the actual number of cases as illustrated by figure \@ref(fig:fitact), we can observe the following :
+
+- The estimated number of __cases closely follow__ the actual number of cases.
+- The rise in the number of estimated cases were __observed to dip__ with each of the interventions. This scenario closely depicts the actual fall in the number of cases.
+- Due to the interventions, the infection rate is expected to drop through a change in the $\beta$ value. This has been accounted for in the model as a result of which, __cases have dropped further after the second intervention__.
+- While the peak number of cases were not accurately estimated, the __timing of the peak was however fairly accurate__.
+
+### Limitations of the current study
+
+Following are the limitations of the current analysis:
+
+- The current methodology is based on the S.E.I.R. model which greatly simplifies the disease dynamics by __considering the entire population as a well-mixed homogeneous group__.
+- While the S.E.I.R. model provides an extra level of granularity and detail in the analysis when compared to the S.I.R. model, it also has two additional drawbacks : __the unknown incubation period and the initial fraction of infected population__. 
+- Unknown parameters such as the __incubation period, initial infected population, recovery period are conveniently assumed__ for the current analysis. However, in a complex dynamic scenario, these values maybe expected to change with time.
+- In order to model the effect of the interventions, the infection rate was manually altered by manipulating the value of $\beta$ for each intervention period in order for the estimated cases to match with the actual cases. Hence, the current model lacks an __explicit way to incorporate the effect of interventions__.
+- The accuracy and reliability of S.E.I.R. model predictions heavily depend on __the availability and quality of data used for parameter estimation__. Incomplete or limited data may cause the model to significantly deviate from the actual solution.
+
+
+
+
 
 
 # 📉 Data curation
@@ -529,4 +652,5 @@ optimum_mle
 
 Cite your data sources, and software used here. 
 
+# References
 
