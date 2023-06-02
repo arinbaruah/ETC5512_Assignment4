@@ -41,7 +41,6 @@ library(tidyverse)
 library(here)
 library(ggplot2)
 library(ggthemes)
-library(ggthemes)
 library(bookdown)
 library(stringr)
 library(DT)
@@ -52,8 +51,7 @@ library(deSolve)
 
 
 ```{r data_sourcing}
-df1 <- read_csv(here::here("data/NCOV_cases_by_agegroup.csv"))
-df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
+df <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
 ```
 
 # Data sources
@@ -69,35 +67,31 @@ df2 <- read_csv(here::here("data/NCOV_cases_by_postcode_LGA.csv"))
  
 3. Codebook for the current dataset can be referred to in the submitted list of files __within the "data" folder__.
    
-4. The unit of this current dataset is __the number of positive diagnosis cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the __type of COVID test, data of diagnosis and the geographical region where the case was detected__.
+4. The unit of this current dataset is __the number of positive diagnosed cases__. This unit represents the number of confirmed COVID-19 cases in a particular geographical region or time frame. It contains daily positive cases broken down into the __type of COVID test, data of diagnosis and the geographical region where the case was detected__.
 Some of the variables which could act as unique identifiers for the COVID-19 dataset are __diagnosis data,age group,post code and the total case count__. For the days with a single observed case in any of the locations (postal code) and age group, a person maybe uniquely identified. 
 
-5. The Victorian Government website contains the COVID-19 information on the number of cases for each local government area and age groups as __separate datasets__. Ideally, we would want the __geographical and demographical data to be stored within one single dataset__ so that we can analyse where were the restrictions enforced and which group of people were affected by these restrictions.
+5. The Victorian Government website contains the COVID-19 information on the number of cases for each local government area and age groups as __separate datasets__. Ideally, we would want the __geographical data to be stored within one single dataset__ so that we can analyse where were the restrictions enforced and who were affected by these restrictions.
+
+The current dataset is clean and is in the required long format to perform exploratory data analysis for a time-series. Moreover, there are no null values observed in the dataset which aids in the analysis as we are not required to perform any further data cleaning steps.
+
+However, the __variable name "Total_case_count" can be misleading__ as it does not specify whether the number of cases __are for one day__ or __the cumulative number of cases__ since the start of analysis.
+
+Overall, it can be concluded that the dataset is __adequately prepared for storage and usage__.
 
 Following were the data wrangling steps applied to obtain the finalized dataset:
 
-- Datasets of COVID-19 cases __granulated by local government areas and age groups__ are considered for creation of the required dataset.
-- Remove unnecessary string characters such as "_" in agegroup column.
-- Transform the agegroup dataframe from the long format to a wide format.
+- Dataset of COVID-19 cases were __granulated by local government areas__ was considered for creation of the required dataset.
+- The total case count was grouped by the diagnosis date and summarised as the total number of cases for each date.
+- Summarisation of the dataframe removed the unwanted fields such as lga code, lga name and the case counts by type of test.
 - Perform a join between the local government area and the agegroup dataset on the diagnosis date.
+- In order to calculate the __7-day growth rate__, a slider function was utilised to calculate the growth rate of total positive cases per day on the __log scale__.
 
 Table \@ref(tab:datasetjoin) illustrates the new dataset created after joining the two dataframes.
 
 ```{r datasetjoin}
 
-df1$agegroup <- str_replace(df1$agegroup,"_","")
-df1_wide <- pivot_wider(data=df1, id_cols = diagnosis_date,
-                        names_from = agegroup, values_from = Total_case_count)
 
-ordered_cols <- c("diagnosis_date","0-9","10-19","20-29",
-                  "30-39","40-49","50-59",
-                  "60-69","70-79","80-89","90+","NA" )
-
-df1_wide <- df1_wide[,ordered_cols]
-
-df_combined <- df2 %>% left_join(df1_wide, by ="diagnosis_date") %>% arrange(diagnosis_date)
-
-head(df_combined) %>%
+head(df) %>%
 kable(caption = 'Mean economic statistics of Melbourne electorate based on 2021 Census data',booktabs = TRUE) %>% 
   kable_styling(bootstrap_options = c("bordered","hover")) %>%
   row_spec(0,background="rgb(172,175,145)",color='black',font_size = 18,align = 'c')
@@ -120,9 +114,8 @@ face_mask <- ymd("2020/07/27") # Mandatory facemasks
 
 plot_interval <- interval(start_date, end_date)
 
-df_combined <- df_combined %>% filter(diagnosis_date %within% plot_interval) %>% mutate(Cumulative_case_count = cumsum(Total_case_count))
 
-df_daily <- df_combined %>% filter(diagnosis_date %within% plot_interval) %>% group_by(diagnosis_date)  %>% summarise(Cases_per_day = sum(Total_case_count))
+df_daily <- df %>% filter(diagnosis_date %within% plot_interval) %>% group_by(diagnosis_date)  %>% summarise(Cases_per_day = sum(Total_case_count))
 
 
 pl1 <- ggplot(data = df_daily,
@@ -216,7 +209,7 @@ As we can observe,the primary difference between the figures \@ref(fig:caseplot)
 ```{r growthrateplot,fig.cap="Growth rate of cases within the analysis period",fig.align='center'}
 
 date_interval <- interval(start = start_date,end = end_date)
-df_growth_rate <- df_combined %>%
+df_growth_rate <- df %>%
   filter(diagnosis_date %within% date_interval) %>% #Restrict to the second wave
   group_by(diagnosis_date) %>%
   summarise(n=n()) %>%
@@ -232,7 +225,7 @@ log(v[7]/v[1]) / 7 #Seven-day growth rate
 
 pl3 <- ggplot(data=df_growth_rate,aes(x=diagnosis_date,y=growth_rate)) +
   geom_line() + theme_clean() +
-  labs(x = "Diagnosis date", y = "Growth rate") +
+  labs(x = "Diagnosis date", y = "Logarithmic growth rate") +
   ggtitle("7-day growth rate of cases \n in 2020") +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title = element_text(face = 'bold')) + geom_smooth(color='darkgreen') +
@@ -325,7 +318,39 @@ In order to understand how the value of $R(o)$ changes for various interventions
 - Phase 2 : __Initial intervention (Lockdowns)__ from `r local_ld` to `r face_mask`
 - Phase 3 : __Additional intervention (Lockdowns + Facemasks)__ from `r face_mask` to `r end_date`.
 
-To understand the effect of the interventions on the spread of the disease, the value of $\beta$ will be altered to account for the reduction of cases in __each of above timeline phases__.
+To understand the effect of the interventions on the spread of the disease, the value of $\beta$ will be altered to account for the reduction of cases in __each of above timeline phases__. The exact steps involved in the incorporation of the interventions within the current S.E.I.R. model have been delineated in section \@ref(label2).
+
+
+
+```{r interventions1, eval=FALSE}
+
+initial_infected <- 20
+initial_state <- c("S" = N - initial_infected, "E" = 0, "I" = initial_infected, "R" = 0, "incidence" = 0)
+COVID_withemergency <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    N <- S + E + I + R 
+
+    if ((t > 29) | (t<=56)) {# First intervention
+      beta <- beta * emergency_efficacy
+    }
+    
+      if (t > 56) { # Second intervention
+      beta <- beta * emergency_efficacy * 0.9
+    }
+
+    dSdt <- -beta * S * I / N
+    dEdt <- beta * S * I / N - sigma * E
+    dIdt <- sigma * E - gamma * I
+    dRdt <- gamma * I
+    dIncidencedt <- sigma * E
+    return(list(
+      c(dSdt, dEdt, dIdt, dRdt, dIncidencedt)
+    ))
+  })
+}
+
+```
+
 
 
 ### Ordinary Differential Equation for solving the model 
@@ -365,9 +390,7 @@ inverse.logit <- function(x) {
 
 
 
-
-
-### Initial parameter selection and solution 
+### Initial parameter selection and solution {#label2}
 
 Following are the initial guess parameters to be applied to the model:
 
@@ -385,14 +408,22 @@ face_mask <- ymd("2020/07/27") # Mandatory facemasks
 
 date_interval <- interval(start_date, end_date)
 
-df_sum <- df2 %>% filter (diagnosis_date %within% plot_interval) %>%  group_by(diagnosis_date) %>% summarise(Total_case_count =  sum(Total_case_count))
+df_sum <- df %>% filter (diagnosis_date %within% plot_interval) %>%  group_by(diagnosis_date) %>% summarise(Total_case_count =  sum(Total_case_count))
 
 N <- sum(df_sum$Total_case_count)
 
 ```
 
+In order to incorporate the effect of the interventions into the model, the $\beta$ value is altered for each intervention phase. As the disease infectiousness is majorly captured by the value of $\beta$, hence, __its value is changed for each of the two interventions to closely influence the number of predicted cases__. 
 
-```{r interventions}
+ - For $t < 29$, Phase 1 with no intervention period is observed. \
+ - For $t > 29$, Phase 2 intervention (Local lockdown) period is observed. \
+ - For $t > 56$, Phase 3 intervention (Face mask) period is observed. \
+ 
+ Where $t$ represents the number of days since the start of the analysis.
+
+
+```{r interventions, echo=FALSE}
 
 initial_infected <- 20
 initial_state <- c("S" = N - initial_infected, "E" = 0, "I" = initial_infected, "R" = 0, "incidence" = 0)
@@ -405,7 +436,7 @@ COVID_withemergency <- function(t, state, parameters) {
     }
     
       if (t > 56) { # Second intervention
-      beta <- beta * emergency_efficacy * 1.5
+      beta <- beta * emergency_efficacy * 0.9
     }
 
     dSdt <- -beta * S * I / N
@@ -513,7 +544,7 @@ optimal_parameters_R0 <- c(
 names(optimal_parameters_R0)[1] <- "beta"
 
 initial_transformed_parameters <- c("R0" = log(2), "emergency_efficacy" = logit(0.5))
-parameters <- c("gamma" = 1/6, "sigma" = 1 / 5)
+parameters <- c("gamma" = 1/10, "sigma" = 1 / 3)
 optimum_mle <- optim(
   par = initial_transformed_parameters,
   fn = negative_log_likelihood_emergency,
@@ -607,17 +638,26 @@ pl4 <- ggplot() +
     linetype = 1,size = 2) +
   annotate("segment",x = local_ld - days(6),
     y = 500,xend = local_ld ,
-    yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+    yend = 480 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
   annotate("text",x = local_ld - days(15),y = 520,
     colour = "black",label = 'Lockdowns implemented \n from 30/06/2020',size = unit(3, "pt")) +
   annotate("segment",x = face_mask,xend = face_mask,
-    y = 0,yend = 700,colour = "yellow",linetype = 1,size = 2) +
+    y = 0,yend = 700,colour = "darkgreen",linetype = 1,size = 2) +
   annotate("segment",x = face_mask - days(6),y = 500,
-    xend = face_mask ,yend = 400 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
+    xend = face_mask ,yend = 480 ,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) +
   annotate("text",x = face_mask - days(12),y = 530,colour = "black",
     label = 'Mandatory facemasks \n from 27/07/2020',
-    size = unit(3, "pt")
-  ) + labs(x="Diagnosis date",y='Number of cases') + 
+    size = unit(3, "pt")) +
+  annotate("text",x = local_ld - days(25),y = 650,colour = "black",
+    label = 'Phase 1 \n No interventions',
+    size = unit(3, "pt")) +
+  annotate("text",x = local_ld + days(15),y = 650,colour = "black",
+    label = 'Phase 2 \n Lockdowns applied',
+    size = unit(3, "pt")) +
+   annotate("text",x = face_mask + days(25),y = 650,colour = "black",
+    label = 'Phase 3 \n Mandatory facemasks',
+    size = unit(3, "pt")) +
+  labs(x="Diagnosis date",y='Number of cases') + 
   ggtitle("Comparison of modeled and actual cases with interventions \n in Victoria ") + theme_clean() + theme(plot.title = element_text(hjust = 0.5)) 
 
 pl4
@@ -642,15 +682,52 @@ Following are the limitations of the current analysis:
 
 
 
-
-
-
 # 📉 Data curation
+
+Following are the key data curation considerations for the current COVID-19 dataset:
+
+- __Date format__: The variable name "diagnosis_date" containing the dates have been formatted in the __YYYY-MM-DD__ format which is ideal for spreadsheet consumption.
+- __No empty cells__: The dataset __does not contain any empty cells or null values__.
+- __One item per cell__: Each cell in the dataset contains one single item.
+- __Data as rectangle__: The data is organised as a single rectangle. Each row contains the number of cases for a particular date while each column contains the variables in the dataset.
+- __Data dictionary__: The data dictionary for the current dataset can be __found within the "data" folder__.
+- __No calculations in raw data__: There are no calculations in the dataset. The current dataset contains observational data.
+- __No font color or highlighting__: The dataset is a CSV file and has __no associated font color or cell highlighting__.
+- __Good names__: The dataset contains variables and observations which are __appropriately named__ for easy understanding.
+- __Backups__: The current dataset is hosted on the Victorian Government website for COVID-19. Additionally, this dataset maybe stored in cloud storages such as GitHub to create additional copies which can be easily accessed at a later point.
+- __Data validation to avoid data entry errors__: Data can be validated by using the count function in R for comparing the number of cases for each day and whether it adds up to the actual reported number of cases. This would help account for ant possible data entry errors in the dataset.
+- __Save data in plain text__: While the original dataset is not in the plain text format, an additional copy of the COVID-19 dataset has been saved in the ".txt" format and __maybe found in the "data" folder__.
 
 
 # Resources
 
-Cite your data sources, and software used here. 
+Following resources and libraries were used for conducting the above analysis:
+
+- __RStudio__ : RStudio Team (2020), Integrated Development for R. RStudio, PBC, Boston, MA URL http://www.rstudio.com/.
+
+- __Tidyverse__ : Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K,
+  Ooms J, Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). “Welcome to the tidyverse.” _Journal of Open Source Software_,
+  *4*(43), 1686. doi:10.21105/joss.01686 <https://doi.org/10.21105/joss.01686>.
+  
+- __ggplot2__ : H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
+
+- __Lubridate__ : Garrett Grolemund, Hadley Wickham (2011). Dates and Times Made Easy with lubridate. Journal of Statistical Software, 40(3), 1-25. URL
+  https://www.jstatsoft.org/v40/i03/.
+  
+- __here__ : Müller K (2020). _here: A Simpler Way to Find Your Files_. R package version 1.0.1, <https://CRAN.R-project.org/package=here>.
+
+- __ggthemes__ : Arnold J (2021). _ggthemes: Extra Themes, Scales and Geoms for 'ggplot2'_. R package version 4.2.4, <https://CRAN.R-project.org/package=ggthemes>.
+
+- __bookdown__ : Xie Y (2023). _bookdown: Authoring Books and Technical Documents with R Markdown_. R package version 0.33, <https://github.com/rstudio/bookdown>.
+
+- __stringr__ : Wickham H (2022). _stringr: Simple, Consistent Wrappers for Common String Operations_. R package version 1.5.0, <https://CRAN.R-project.org/package=stringr>.
+
+- __DT__ : Xie Y, Cheng J, Tan X (2023). _DT: A Wrapper of the JavaScript Library 'DataTables'_. R package version 0.27, <https://CRAN.R-project.org/package=DT>.
+
+- __deSolve__ : Karline Soetaert, Thomas Petzoldt, R. Woodrow Setzer (2010). Solving Differential Equations in R: Package deSolve. Journal of Statistical Software, 33(9),
+  1--25. doi:10.18637/jss.v033.i09
+  
+- __kableExtra__ : Zhu H (2021). _kableExtra: Construct Complex Table with 'kable' and Pipe Syntax_. R package version 1.3.4, <https://CRAN.R-project.org/package=kableExtra>.
 
 # References
 
